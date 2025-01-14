@@ -42,6 +42,7 @@ const unsigned long inactivityLimit = 1 * 60 * 1000;
 EspSoftwareSerial::UART swSer;
 HardwareSerial Serial2(1);
 ModbusRTU mb;
+bool state = false; 
 
 bool cb(Modbus::ResultCode event, uint16_t transactionId, void *data)
 { 
@@ -59,62 +60,62 @@ bool cbWrite(Modbus::ResultCode event, uint16_t transactionId, void* data) {
   return true;
 }
 
-// Callback receives raw data from RTU Device and send back to BLE Client 
-Modbus::ResultCode cbRtuRaw(uint8_t *data, uint8_t len, void *custom)
-{
-  auto src = (Modbus::frame_arg_t *)custom;
-  int total_message_size = 1 + len + 2; // address + modbus msg + crc
-  uint8_t bleMessage[BLE_SIZE];
-  uint8_t rtuResponse[256];
+// // Callback receives raw data from RTU Device and send back to BLE Client 
+// Modbus::ResultCode cbRtuRaw(uint8_t *data, uint8_t len, void *custom)
+// {
+//   auto src = (Modbus::frame_arg_t *)custom;
+//   int total_message_size = 1 + len + 2; // address + modbus msg + crc
+//   uint8_t bleMessage[BLE_SIZE];
+//   uint8_t rtuResponse[256];
 
-  if (total_message_size > 256)
-  {
-    return Modbus::EX_PASSTHROUGH;
-  }
+//   if (total_message_size > 256)
+//   {
+//     return Modbus::EX_PASSTHROUGH;
+//   }
 
-  rtuResponse[0] = src->slaveId;
+//   rtuResponse[0] = src->slaveId;
 
-  // message
-  for (size_t i = 0; i < len; i++)
-  {
-    rtuResponse[1 + i] = data[i];
-  }
-  rtuResponse[len + 1] = data[len];
-  rtuResponse[len + 2] = data[len + 1];
-  Serial.printf("RTU Message Recived Slave: %d, Fn: %02X, len: %d", src->slaveId, data[0], len);
-  int numberBlePackets = total_message_size / BLE_SIZE;
-  int finalBlePacketSize = total_message_size % BLE_SIZE;
+//   // message
+//   for (size_t i = 0; i < len; i++)
+//   {
+//     rtuResponse[1 + i] = data[i];
+//   }
+//   rtuResponse[len + 1] = data[len];
+//   rtuResponse[len + 2] = data[len + 1];
+//   Serial.printf("RTU Message Recived Slave: %d, Fn: %02X, len: %d", src->slaveId, data[0], len);
+//   int numberBlePackets = total_message_size / BLE_SIZE;
+//   int finalBlePacketSize = total_message_size % BLE_SIZE;
 
-  int dataIndex;
+//   int dataIndex;
 
-  dataIndex = 0;
-  for (size_t i = 0; i < numberBlePackets; i++)
-  {
-    for (size_t j = 0; j < BLE_SIZE; j++)
-    {
-      bleMessage[j] = rtuResponse[dataIndex];
-      dataIndex++;
-    }
+//   dataIndex = 0;
+//   for (size_t i = 0; i < numberBlePackets; i++)
+//   {
+//     for (size_t j = 0; j < BLE_SIZE; j++)
+//     {
+//       bleMessage[j] = rtuResponse[dataIndex];
+//       dataIndex++;
+//     }
 
-    Serial.println("Notify BLE Device 20 bytes");
-    pTxCharacteristic->setValue(bleMessage, BLE_SIZE);
-    pTxCharacteristic->notify();
-  }
+//     Serial.println("Notify BLE Device 20 bytes");
+//     pTxCharacteristic->setValue(bleMessage, BLE_SIZE);
+//     pTxCharacteristic->notify();
+//   }
 
-  if (finalBlePacketSize > 0)
-  {
-    for (size_t i = 0; i < finalBlePacketSize; i++)
-    {
-      bleMessage[i] = rtuResponse[dataIndex];
-      dataIndex++;
-    }
-    Serial.println("Notify BLE Device final packet");
-    pTxCharacteristic->setValue(bleMessage, finalBlePacketSize);
-    pTxCharacteristic->notify();
-  }
+//   if (finalBlePacketSize > 0)
+//   {
+//     for (size_t i = 0; i < finalBlePacketSize; i++)
+//     {
+//       bleMessage[i] = rtuResponse[dataIndex];
+//       dataIndex++;
+//     }
+//     Serial.println("Notify BLE Device final packet");
+//     pTxCharacteristic->setValue(bleMessage, finalBlePacketSize);
+//     pTxCharacteristic->notify();
+//   }
 
-  return Modbus::EX_PASSTHROUGH;
-}
+//   return Modbus::EX_PASSTHROUGH;
+// }
 
 uint16_t readModbus() {
     uint16_t res[REG_COUNT];
@@ -196,141 +197,76 @@ void envoyerMessageAvecAdresseValeur(int adresse, const char* valeur)
 // Nouvelle fonction pour créer la chaîne de caractères "adresse:valeur"
 void envoyerFloatMessageAvecAdresseValeur(int adresse, float valeur)
 {
-    String nouvelleChaine = String(adresse) + ":" + String(valeur);
+    String nouvelleChaine = String(adresse) + ":" + String(valeur);//valeur comes from?
+
     sendMessageToSlave(nouvelleChaine);
 }
 
-void envoyerValeurRegistre0_1()
-{
-    uint16_t reg0 = mb.Hreg(0);
-    uint16_t reg1 = mb.Hreg(1);
+void sendBlockRegisters(int bloc) {
+    uint8_t message[20]; // Tableau de 32 bytes
+    message[0] = bloc;   // Indicateur de bloc (0 ou 1)
+    message[1] = 16;
 
-    uint32_t combined = ((uint32_t)reg0 << 16) | reg1;
+    if (bloc == 0) {
+        // Récupération des registres 0/1, 2/3, 4/5, 6/7
+        uint16_t registres[] = {mb.Hreg(0), mb.Hreg(1), mb.Hreg(2), mb.Hreg(3),
+                                mb.Hreg(4), mb.Hreg(5), mb.Hreg(6), mb.Hreg(7)};
 
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
+                                
+        int index = 2;
 
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(6, valeur);
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        }
+    } else if (bloc == 1) {
+        // Récupération des registres 8/9, 10/11, 12/13, 100
+        uint16_t registres[] = {mb.Hreg(8), mb.Hreg(9), mb.Hreg(10), mb.Hreg(11),
+                                mb.Hreg(12), mb.Hreg(13), mb.Hreg(100)}; 
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
+        //but ble works better with 20 bytes, but you can try
+        Serial.println("Register 100" );
+        Serial.println(message[16]);
+
+    }
+    pTxCharacteristic->setValue(message, BLE_SIZE);
+    pTxCharacteristic->notify();
 }
-
-void envoyerValeurRegistre2_3()
-{
-    uint16_t reg2 = mb.Hreg(2);
-    uint16_t reg3 = mb.Hreg(3);
-
-    uint32_t combined = ((uint32_t)reg2 << 16) | reg3;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(7, valeur);
-}
-
-void envoyerValeurRegistre4_5()
-{
-    uint16_t reg4 = mb.Hreg(4);
-    uint16_t reg5 = mb.Hreg(5);
-
-    uint32_t combined = ((uint32_t)reg4 << 16) | reg5;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(2, valeur);
-}
-
-void envoyerValeurRegistre6_7()
-{
-    uint16_t reg6 = mb.Hreg(6);
-    uint16_t reg7 = mb.Hreg(7);
-
-    uint32_t combined = ((uint32_t)reg6 << 16) | reg7;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(4, valeur);
-}
-
-void envoyerValeurRegistre8_9()
-{
-    uint16_t reg8 = mb.Hreg(8);
-    uint16_t reg9 = mb.Hreg(9);
-
-    uint32_t combined = ((uint32_t)reg8 << 16) | reg9;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(5, valeur);
-}
-
-void envoyerValeurRegistre10_11()
-{
-    uint16_t reg10 = mb.Hreg(10);
-    uint16_t reg11 = mb.Hreg(11);
-
-    uint32_t combined = ((uint32_t)reg10 << 16) | reg11;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(1, valeur);
-}
-
-void envoyerValeurRegistre12_13()
-{
-    uint16_t reg12 = mb.Hreg(12);
-    uint16_t reg13 = mb.Hreg(13);
-
-    uint32_t combined = ((uint32_t)reg12 << 16) | reg13;
-
-    float valeur;
-    memcpy(&valeur, &combined, sizeof(float));
-
-    Serial.println(String(valeur));
-    envoyerFloatMessageAvecAdresseValeur(3, valeur);
-}
-
-
-void envoyerValeurRegistre100()
-{
-    uint16_t reg100 = mb.Hreg(100);
-
-    // Convertir la valeur du registre en une chaîne décimale
-    String message = String(reg100);
-
-    // Debug pour vérifier le message
-    Serial.print("Message envoyé : ");
-    Serial.println(message);
-
-    // Envoyer la valeur brute du registre
-    envoyerMessageAvecAdresseValeur(8, message.c_str());
-}
-
 
 
 void checkMessage()
 {
+    
+    uint8_t result = mb.Hreg(100) & 0x0001;
+    
+    if (result) {
+        Serial.println("ACTIVE VALVE");
+        digitalWrite(D0, HIGH);
+        digitalWrite(D1, HIGH);
+        digitalWrite(D2, HIGH);
+        digitalWrite(D3, HIGH);
+    }
+    else {
+        Serial.println("DEACTIVE VALVE");
+        digitalWrite(D0, LOW);
+        digitalWrite(D1, LOW);
+        digitalWrite(D2, LOW);
+        digitalWrite(D3, LOW);
+    }
     if (!_hasMessage) return;
     lastActivityTime = millis();
-    Serial.println("Command received");
+    //Serial.println("Command received");
     _lastCommand.trim();
     if (_lastCommand == "READ") {
-      envoyerValeurRegistre0_1();
-      envoyerValeurRegistre2_3();
-      envoyerValeurRegistre4_5();
-      envoyerValeurRegistre6_7();
-      envoyerValeurRegistre8_9();
-      envoyerValeurRegistre10_11();
-      envoyerValeurRegistre12_13();
-      envoyerValeurRegistre100();
+      sendBlockRegisters(0);
+      delay(25);          
+      sendBlockRegisters(1); 
+      delay(25);          
       return;
     }  
 }
@@ -367,6 +303,13 @@ void setup() {
     pinMode(D0, OUTPUT);
     pinMode(D1, OUTPUT);
     pinMode(D2, OUTPUT);
+    pinMode(D3, OUTPUT);
+
+    digitalWrite(D0, LOW);
+    digitalWrite(D1, LOW);
+    digitalWrite(D2, LOW);
+    digitalWrite(D3, LOW);
+
     swSer.enableRxGPIOPullUp(true);
     swSer.setTransmitEnablePin(RTS2);
     swSer.begin(19200, SWSERIAL_8E1, RXD2, TXD2, false, 64, 64);
@@ -415,9 +358,12 @@ void loop()
     // }
     checkMessage();
     if (msgCounter++ > 5) {
-      Serial.println("alive");
+      //Serial.println("alive");
        msgCounter = 0;
     }
+
+
+    
     mb.task();
     yield();
     delay(100);
