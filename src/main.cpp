@@ -42,7 +42,6 @@ const unsigned long inactivityLimit = 1 * 60 * 1000;
 EspSoftwareSerial::UART swSer;
 HardwareSerial Serial2(1);
 ModbusRTU mb;
-bool state = false; 
 
 bool cb(Modbus::ResultCode event, uint16_t transactionId, void *data)
 { 
@@ -230,9 +229,23 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
         } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
         //but ble works better with 20 bytes, but you can try
-        Serial.println("Register 100" );
-        Serial.println(message[16]);
+        // Serial.println("Register 100" );
+        // Serial.println(message[16]);
+        // Serial.println(message[13]);
 
+    } else if (bloc == 2) {
+        uint16_t registres[] = {mb.Hreg(300)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        }
+
+        Serial.println("Register 300" );
+        Serial.println(message[17]);
+        Serial.println(message[15]);
     }
     pTxCharacteristic->setValue(message, BLE_SIZE);
     pTxCharacteristic->notify();
@@ -242,22 +255,36 @@ void sendBlockRegisters(int bloc) {
 void checkMessage()
 {
     
-    uint8_t result = mb.Hreg(100) & 0x0001;
-    
-    if (result) {
-        Serial.println("ACTIVE VALVE");
-        digitalWrite(D0, HIGH);
-        digitalWrite(D1, HIGH);
-        digitalWrite(D2, HIGH);
-        digitalWrite(D3, HIGH);
-    }
-    else {
-        Serial.println("DEACTIVE VALVE");
-        digitalWrite(D0, LOW);
-        digitalWrite(D1, LOW);
-        digitalWrite(D2, LOW);
-        digitalWrite(D3, LOW);
-    }
+    uint8_t result = mb.Hreg(300) & 0x000F; 
+
+if (result & 0x0001) { 
+    Serial.println("ACTIVE VALVE 1");
+    digitalWrite(D0, HIGH);
+} else {
+    digitalWrite(D0, LOW); 
+}
+
+if (result & 0x0002) { 
+    Serial.println("ACTIVE VALVE 2");
+    digitalWrite(D1, HIGH);
+} else {
+    digitalWrite(D1, LOW); 
+}
+
+if (result & 0x0004) { 
+    Serial.println("ACTIVE VALVE 3");
+    digitalWrite(D2, HIGH);
+} else {
+    digitalWrite(D2, LOW); 
+}
+
+if (result & 0x0008) { 
+    Serial.println("ACTIVE VALVE 4");
+    digitalWrite(D3, HIGH);
+} else {
+    digitalWrite(D3, LOW); // Désactive la pin si le bit n'est pas actif
+}
+
     if (!_hasMessage) return;
     lastActivityTime = millis();
     //Serial.println("Command received");
@@ -317,7 +344,7 @@ void setup() {
     mb.begin(&swSer);
     mb.slave(SLAVE_ID);
     
-    for (uint16_t i = REGN; i <= 220; i++) {
+    for (uint16_t i = REGN; i <= 305; i++) {
         mb.addHreg(i);
     }
 
