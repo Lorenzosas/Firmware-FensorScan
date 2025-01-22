@@ -147,6 +147,8 @@ class BleRxCallbacks : public BLECharacteristicCallbacks
     }
 };
 
+void sendBlockRegisters(int bloc);
+
 class BleServerCallbacks : public BLEServerCallbacks
 {
     void onConnect(BLEServer *pServer) {
@@ -202,14 +204,14 @@ void envoyerFloatMessageAvecAdresseValeur(int adresse, float valeur)
 }
 
 void sendBlockRegisters(int bloc) {
-    uint8_t message[20]; // Tableau de 32 bytes
+    uint8_t message[22]; // Tableau de 32 bytes
     message[0] = bloc;   // Indicateur de bloc (0 ou 1)
     message[1] = 16;
 
     if (bloc == 0) {
-        // Récupération des registres 0/1, 2/3, 4/5, 6/7
-        uint16_t registres[] = {mb.Hreg(0), mb.Hreg(1), mb.Hreg(2), mb.Hreg(3),
-                                mb.Hreg(4), mb.Hreg(5), mb.Hreg(6), mb.Hreg(7)};
+        // Récupération des registres 2/3, 4/5, 6/7, 8/9
+        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), 
+                                mb.Hreg(6), mb.Hreg(7), mb.Hreg(8), mb.Hreg(9)};
 
                                 
         int index = 2;
@@ -219,9 +221,9 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
         }
     } else if (bloc == 1) {
-        // Récupération des registres 8/9, 10/11, 12/13, 100
-        uint16_t registres[] = {mb.Hreg(8), mb.Hreg(9), mb.Hreg(10), mb.Hreg(11),
-                                mb.Hreg(12), mb.Hreg(13), mb.Hreg(100)}; 
+        // Récupération des registres 10/11, 12/13, 14/15, 100
+        uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
+                                mb.Hreg(14), mb.Hreg(15), mb.Hreg(100)}; 
         int index = 2;
         
         for (int i = 0; i < 8; i++) {
@@ -243,11 +245,31 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
         }
 
-        Serial.println("Register 300" );
-        Serial.println(message[17]);
-        Serial.println(message[15]);
+        // Serial.println("Register 300" );
+        // Serial.println(message[17]);
+        // Serial.println(message[15]);
+    } else if (bloc == 3) {
+        uint16_t registres[] = {mb.Hreg(200), mb.Hreg(201), mb.Hreg(202), mb.Hreg(203), mb.Hreg(204),
+                                mb.Hreg(205), mb.Hreg(206), mb.Hreg(207)};//, mb.Hreg(208), mb.Hreg(209)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        }
+    } else if (bloc == 4) {
+        uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213), mb.Hreg(214),
+                                mb.Hreg(215), mb.Hreg(216), mb.Hreg(217)};//, mb.Hreg(218), mb.Hreg(219)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        }
     }
-    pTxCharacteristic->setValue(message, BLE_SIZE);
+    pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
 
@@ -285,17 +307,16 @@ if (result & 0x0008) {
     digitalWrite(D3, LOW); // Désactive la pin si le bit n'est pas actif
 }
 
-    if (!_hasMessage) return;
-    lastActivityTime = millis();
-    //Serial.println("Command received");
-    _lastCommand.trim();
-    if (_lastCommand == "READ") {
-      sendBlockRegisters(0);
-      delay(25);          
-      sendBlockRegisters(1); 
-      delay(25);          
-      return;
-    }  
+// Lecture automatique des données dès qu'une connexion est établie
+
+        Serial.println("Reading initial data...");
+        sendBlockRegisters(3);
+        delay(25);
+        sendBlockRegisters(0);
+        delay(25);
+        sendBlockRegisters(1);
+
+    
 }
 
 uint16_t _simulatedValue = 0;
@@ -377,21 +398,38 @@ void setup() {
 int msgCounter = 0;
 void loop()
 {
-    // if (millis() - lastActivityTime > inactivityLimit && deviceConnected) {
-    //      Serial.println("Last time checking...");
-    //      pServer->disconnect(connId);
-    //      Serial.println("Disconnected due to inactivity...");
-    //      pServer->startAdvertising();
-    // }
+    
+    uint16_t reg200 = mb.Hreg(200); 
+    uint16_t reg201 = mb.Hreg(201);
+    uint16_t reg202 = mb.Hreg(202);
+    uint16_t reg203 = mb.Hreg(203);
+    Serial.print("registre 200/204: ");
+    Serial.println(reg200);
+    Serial.println(reg201);
+    Serial.println(reg202);
+    Serial.println(reg203);
+
+    uint16_t reg210 = mb.Hreg(210); 
+    uint16_t reg211 = mb.Hreg(211);
+    uint16_t reg212 = mb.Hreg(212);
+    uint16_t reg213 = mb.Hreg(213);
+    Serial.print("registre 210/214: ");
+    Serial.println(reg210);
+    Serial.println(reg211);
+    Serial.println(reg212);
+    Serial.println(reg213);
+
+    // Gérer les messages
     checkMessage();
+
+    // Indication de l'état actif
     if (msgCounter++ > 5) {
-      //Serial.println("alive");
-       msgCounter = 0;
+        Serial.println("alive");
+        msgCounter = 0;
     }
 
-
-    
+    // Exécution des tâches Modbus
     mb.task();
     yield();
-    delay(100);
+    delay(100); 
 }
