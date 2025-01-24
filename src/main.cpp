@@ -231,8 +231,8 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
         } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
         //but ble works better with 20 bytes, but you can try
-        // Serial.println("Register 100" );
-        // Serial.println(message[16]);
+
+        // Serial.println("Register temperature" );
         // Serial.println(message[13]);
 
     } else if (bloc == 2) {
@@ -244,10 +244,6 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         }
-
-        // Serial.println("Register 300" );
-        // Serial.println(message[17]);
-        // Serial.println(message[15]);
     } else if (bloc == 3) {
         uint16_t registres[] = {mb.Hreg(200), mb.Hreg(201), mb.Hreg(202), mb.Hreg(203), mb.Hreg(204),
                                 mb.Hreg(205), mb.Hreg(206), mb.Hreg(207)};//, mb.Hreg(208), mb.Hreg(209)}; 
@@ -255,8 +251,8 @@ void sendBlockRegisters(int bloc) {
         int index = 2;
         
         for (int i = 0; i < 8; i++) {
-            message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
+            message[index++] = registres[i] >> 8;   // Byte haut
         }
     } else if (bloc == 4) {
         uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213), mb.Hreg(214),
@@ -265,10 +261,20 @@ void sendBlockRegisters(int bloc) {
         int index = 2;
         
         for (int i = 0; i < 8; i++) {
-            message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
+            message[index++] = registres[i] >> 8;   // Byte haut
         }
-    }
+    } else if (bloc == 5) {
+        uint16_t registres[] = {mb.Hreg(220), mb.Hreg(221), mb.Hreg(222), mb.Hreg(223), mb.Hreg(224),
+                                mb.Hreg(225), mb.Hreg(226), mb.Hreg(227)};//, mb.Hreg(228), mb.Hreg(229)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] & 0xFF; // Byte bas
+            message[index++] = registres[i] >> 8;   // Byte haut
+        }
+    }    
     pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
@@ -311,13 +317,36 @@ if (result & 0x0008) {
 
         Serial.println("Reading initial data...");
         sendBlockRegisters(3);
-        delay(25);
+        sendBlockRegisters(4);
+        sendBlockRegisters(5);
+        //delay(25);
         sendBlockRegisters(0);
-        delay(25);
+        //delay(25);
         sendBlockRegisters(1);
 
     
 }
+
+void afficherTexteAscii(uint16_t startReg, uint16_t endReg) {
+    String texte = "";
+    for (uint16_t reg = startReg; reg <= endReg; reg++) {
+        uint16_t valeurRegistre = mb.Hreg(reg);
+        
+        // Extraire les deux octets du registre
+        char highByte = (valeurRegistre >> 8) & 0xFF; // Octet supérieur
+        char lowByte = valeurRegistre & 0xFF;         // Octet inférieur
+        
+        // Ajouter les caractères à la chaîne s'ils sont imprimables
+        if (isPrintable(highByte)) {
+            texte += highByte;
+        }
+        if (isPrintable(lowByte)) {
+            texte += lowByte;
+        }
+    }
+    Serial.println("Serial number : " + texte);
+}
+
 
 uint16_t _simulatedValue = 0;
 
@@ -396,40 +425,23 @@ void setup() {
 }
 
 int msgCounter = 0;
-void loop()
-{
-    
-    uint16_t reg200 = mb.Hreg(200); 
-    uint16_t reg201 = mb.Hreg(201);
-    uint16_t reg202 = mb.Hreg(202);
-    uint16_t reg203 = mb.Hreg(203);
-    Serial.print("registre 200/204: ");
-    Serial.println(reg200);
-    Serial.println(reg201);
-    Serial.println(reg202);
-    Serial.println(reg203);
+unsigned long lastMillis = 0;
 
-    uint16_t reg210 = mb.Hreg(210); 
-    uint16_t reg211 = mb.Hreg(211);
-    uint16_t reg212 = mb.Hreg(212);
-    uint16_t reg213 = mb.Hreg(213);
-    Serial.print("registre 210/214: ");
-    Serial.println(reg210);
-    Serial.println(reg211);
-    Serial.println(reg212);
-    Serial.println(reg213);
+   void loop() {
+       unsigned long currentMillis = millis();
 
-    // Gérer les messages
-    checkMessage();
+       if (currentMillis - lastMillis >= interval) {
+           lastMillis = currentMillis;
+           checkMessage();
 
-    // Indication de l'état actif
-    if (msgCounter++ > 5) {
-        Serial.println("alive");
-        msgCounter = 0;
-    }
+           afficherTexteAscii(210, 219);
 
-    // Exécution des tâches Modbus
-    mb.task();
-    yield();
-    delay(100); 
-}
+
+           if (msgCounter++ > 5) {
+               Serial.println("alive");
+               msgCounter = 0;
+           }
+       }
+           mb.task();
+       yield();
+   }
