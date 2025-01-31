@@ -204,8 +204,8 @@ void envoyerFloatMessageAvecAdresseValeur(int adresse, float valeur)
 }
 
 void sendBlockRegisters(int bloc) {
-    uint8_t message[22]; // Tableau de 32 bytes
-    message[0] = bloc;   // Indicateur de bloc (0 ou 1)
+    uint8_t message[22]; 
+    message[0] = bloc;   
     message[1] = 16;
 
     if (bloc == 0) {
@@ -327,26 +327,6 @@ if (result & 0x0008) {
     
 }
 
-void afficherTexteAscii(uint16_t startReg, uint16_t endReg) {
-    String texte = "";
-    for (uint16_t reg = startReg; reg <= endReg; reg++) {
-        uint16_t valeurRegistre = mb.Hreg(reg);
-        
-        // Extraire les deux octets du registre
-        char highByte = (valeurRegistre >> 8) & 0xFF; // Octet supérieur
-        char lowByte = valeurRegistre & 0xFF;         // Octet inférieur
-        
-        // Ajouter les caractères à la chaîne s'ils sont imprimables
-        if (isPrintable(highByte)) {
-            texte += highByte;
-        }
-        if (isPrintable(lowByte)) {
-            texte += lowByte;
-        }
-    }
-    Serial.println("Serial number : " + texte);
-}
-
 
 uint16_t _simulatedValue = 0;
 
@@ -393,6 +373,10 @@ void setup() {
 
     mb.begin(&swSer);
     mb.slave(SLAVE_ID);
+
+    for (uint16_t i = REGN; i <= 305; i++) {
+    mb.addHreg(i, 0); // Initialiser chaque registre a 0
+}
     
     for (uint16_t i = REGN; i <= 305; i++) {
         mb.addHreg(i);
@@ -429,12 +413,11 @@ unsigned long lastMillis = 0;
 
    void loop() {
        unsigned long currentMillis = millis();
+       
 
        if (currentMillis - lastMillis >= interval) {
            lastMillis = currentMillis;
            checkMessage();
-
-           afficherTexteAscii(210, 219);
 
 
            if (msgCounter++ > 5) {
