@@ -382,6 +382,10 @@ void setup() {
         mb.addHreg(i);
     }
 
+}
+
+void startBluetooth() {
+    
     BLEDevice::init("fensorscan");
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new BleServerCallbacks());
@@ -410,21 +414,25 @@ void setup() {
 
 int msgCounter = 0;
 unsigned long lastMillis = 0;
+bool bluetooth_started = false;
 
    void loop() {
        unsigned long currentMillis = millis();
        
 
-       if (currentMillis - lastMillis >= interval) {
+       if (bluetooth_started && currentMillis - lastMillis >= interval) {
            lastMillis = currentMillis;
            checkMessage();
-
-
-           if (msgCounter++ > 5) {
-               Serial.println("alive");
-               msgCounter = 0;
-           }
+       } else if(!bluetooth_started) {
+            startBluetooth();
+            bluetooth_started = true;
        }
-           mb.task();
-       yield();
+
+        if (msgCounter++ > 5) {
+            Serial.println("alive");
+            msgCounter = 0;
+        }
+
+        mb.task();
+        yield();
    }
