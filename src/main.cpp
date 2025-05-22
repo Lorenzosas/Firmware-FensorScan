@@ -43,6 +43,10 @@ EspSoftwareSerial::UART swSer;
 HardwareSerial Serial2(1);
 ModbusRTU mb;
 
+int msgCounter = 0;
+unsigned long lastMillis = 0;
+bool bluetooth_started = false;
+
 bool cb(Modbus::ResultCode event, uint16_t transactionId, void *data)
 { 
   // Callback to monitor errors
@@ -59,75 +63,6 @@ bool cbWrite(Modbus::ResultCode event, uint16_t transactionId, void* data) {
   return true;
 }
 
-// // Callback receives raw data from RTU Device and send back to BLE Client 
-// Modbus::ResultCode cbRtuRaw(uint8_t *data, uint8_t len, void *custom)
-// {
-//   auto src = (Modbus::frame_arg_t *)custom;
-//   int total_message_size = 1 + len + 2; // address + modbus msg + crc
-//   uint8_t bleMessage[BLE_SIZE];
-//   uint8_t rtuResponse[256];
-
-//   if (total_message_size > 256)
-//   {
-//     return Modbus::EX_PASSTHROUGH;
-//   }
-
-//   rtuResponse[0] = src->slaveId;
-
-//   // message
-//   for (size_t i = 0; i < len; i++)
-//   {
-//     rtuResponse[1 + i] = data[i];
-//   }
-//   rtuResponse[len + 1] = data[len];
-//   rtuResponse[len + 2] = data[len + 1];
-//   Serial.printf("RTU Message Recived Slave: %d, Fn: %02X, len: %d", src->slaveId, data[0], len);
-//   int numberBlePackets = total_message_size / BLE_SIZE;
-//   int finalBlePacketSize = total_message_size % BLE_SIZE;
-
-//   int dataIndex;
-
-//   dataIndex = 0;
-//   for (size_t i = 0; i < numberBlePackets; i++)
-//   {
-//     for (size_t j = 0; j < BLE_SIZE; j++)
-//     {
-//       bleMessage[j] = rtuResponse[dataIndex];
-//       dataIndex++;
-//     }
-
-//     Serial.println("Notify BLE Device 20 bytes");
-//     pTxCharacteristic->setValue(bleMessage, BLE_SIZE);
-//     pTxCharacteristic->notify();
-//   }
-
-//   if (finalBlePacketSize > 0)
-//   {
-//     for (size_t i = 0; i < finalBlePacketSize; i++)
-//     {
-//       bleMessage[i] = rtuResponse[dataIndex];
-//       dataIndex++;
-//     }
-//     Serial.println("Notify BLE Device final packet");
-//     pTxCharacteristic->setValue(bleMessage, finalBlePacketSize);
-//     pTxCharacteristic->notify();
-//   }
-
-//   return Modbus::EX_PASSTHROUGH;
-// }
-
-uint16_t readModbus() {
-    uint16_t res[REG_COUNT];
-    if (!mb.slave()) {
-        mb.readHreg(SLAVE_ID, FIRST_REG, res, REG_COUNT, cb);
-        while(mb.slave()) {
-            mb.task();
-            delay(10);
-        }
-        return(res[0]);
-    }
-    return 0;
-}
 
 class BleRxCallbacks : public BLECharacteristicCallbacks
 {
@@ -381,12 +316,31 @@ void setup() {
     for (uint16_t i = REGN; i <= 305; i++) {
         mb.addHreg(i);
     }
+    mb.Hreg(210, 0x00);
 
 }
 
+String ushortAsciiArrayToString(unsigned short* array, int size) {
+    String result = "";
+    for (int i = 0; i < size; i++) {
+        char highByte = (char)((array[i] >> 8) & 0xFF);
+        char lowByte = (char)(array[i] & 0xFF);
+        result += lowByte;
+        result += highByte;
+
+    }
+    return result;
+  }
+
 void startBluetooth() {
-    
-    BLEDevice::init("fensorscan");
+
+    uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213)};
+    if (registres[0] == 0x00) return;
+    String serialNumber =  ushortAsciiArrayToString(registres, 4);
+    String advertise_name = "fensorSCAN-";
+    advertise_name += serialNumber;
+    Serial.println(advertise_name);
+    BLEDevice::init(advertise_name.c_str());
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new BleServerCallbacks());
 
@@ -410,29 +364,30 @@ void startBluetooth() {
     pServer->getAdvertising()->start();
     Serial.println("Waiting for a client connection to notify...");
     pServer->startAdvertising();
+    bluetooth_started = true;
 }
-
-int msgCounter = 0;
-unsigned long lastMillis = 0;
-bool bluetooth_started = false;
 
    void loop() {
        unsigned long currentMillis = millis();
-       
-
+       mb.task();
+    //   uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211)};
+    //   String serialNumber =  ushortAsciiArrayToString(registres, 2);
+    //   String advertise_name = "fensorscan-";
+    //   advertise_name += serialNumber;
+    //    Serial.println(advertise_name);
        if (bluetooth_started && currentMillis - lastMillis >= interval) {
            lastMillis = currentMillis;
            checkMessage();
        } else if(!bluetooth_started) {
             startBluetooth();
-            bluetooth_started = true;
        }
 
-        if (msgCounter++ > 5) {
-            Serial.println("alive");
-            msgCounter = 0;
-        }
+        // if (msgCounter++ > 5) {
+        //     Serial.println("alive");
+        //     msgCounter = 0;
+        // }
 
-        mb.task();
+        //mb.task();
+
         yield();
    }
