@@ -145,7 +145,7 @@ void sendBlockRegisters(int bloc) {
 
     if (bloc == 0) {
         // Récupération des registres 2/3, 4/5, 6/7, 8/9
-        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), 
+        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), //reg 4 > index 6
                                 mb.Hreg(6), mb.Hreg(7), mb.Hreg(8), mb.Hreg(9)};
 
                                 
@@ -158,8 +158,8 @@ void sendBlockRegisters(int bloc) {
     } else if (bloc == 1) {
         // Récupération des registres 10/11, 12/13, 14/15, 100
         uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
-                                mb.Hreg(14), mb.Hreg(15), mb.Hreg(100)}; 
-        int index = 2;
+                                mb.Hreg(0), mb.Hreg(1), mb.Hreg(100)}; //its sending register 0 / 1 starting at index 10, should it work?
+        int index = 2; //temeperature register is 10? supposed to be 0/1
         
         for (int i = 0; i < 8; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
@@ -167,8 +167,8 @@ void sendBlockRegisters(int bloc) {
         } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
         //but ble works better with 20 bytes, but you can try
 
-        // Serial.println("Register temperature" );
-        // Serial.println(message[13]);
+        Serial.println("Register 100" );
+        Serial.println(mb.Hreg(100));
 
     } else if (bloc == 2) {
         uint16_t registres[] = {mb.Hreg(300)}; 
@@ -209,7 +209,34 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
             message[index++] = registres[i] >> 8;   // Byte haut
         }
-    }    
+    }  else if (bloc == 6) {
+        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17), //not here 16 / 17 it was before
+                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } 
+        // Serial.println(mb.Hreg(16));
+        // Serial.println(mb.Hreg(17));
+        // Serial.println(mb.Hreg(18));
+        // Serial.println(mb.Hreg(19));
+        // Serial.println(mb.Hreg(20));
+        // Serial.println(mb.Hreg(21));
+        // Serial.println(mb.Hreg(22));
+        // Serial.println(mb.Hreg(23));
+    } else if (bloc == 7) {
+        uint16_t registres[] = {mb.Hreg(22), mb.Hreg(23)}; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } 
+    } 
     pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
@@ -258,6 +285,7 @@ if (result & 0x0008) {
         sendBlockRegisters(0);
         //delay(25);
         sendBlockRegisters(1);
+        sendBlockRegisters(6);
 
     
 }
@@ -335,8 +363,8 @@ String ushortAsciiArrayToString(unsigned short* array, int size) {
 void startBluetooth() {
 
     uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213)};
-    if (registres[0] == 0x00) return;
-    String serialNumber =  ushortAsciiArrayToString(registres, 4);
+    if (registres[0] == 0x00) return; //probably its not starting because no values here
+    String serialNumber  =  ushortAsciiArrayToString(registres, 4);
     String advertise_name = "fensorSCAN-";
     advertise_name += serialNumber;
     Serial.println(advertise_name);
