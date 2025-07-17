@@ -158,7 +158,7 @@ void sendBlockRegisters(int bloc) {
     } else if (bloc == 1) {
         // Récupération des registres 10/11, 12/13, 14/15, 100
         uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
-                                mb.Hreg(0), mb.Hreg(1), mb.Hreg(100)}; //its sending register 0 / 1 starting at index 10, should it work?
+                                mb.Hreg(24), mb.Hreg(25), mb.Hreg(100)}; //its sending register 0 / 1 starting at index 10, should it work?
         int index = 2; //temeperature register is 10? supposed to be 0/1
         
         for (int i = 0; i < 8; i++) {
@@ -210,9 +210,9 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] >> 8;   // Byte haut
         }
     }  else if (bloc == 6) {
-        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17), //not here 16 / 17 it was before
-                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)}; 
-
+        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17), //not here 16 / 17 it was before no register 18
+                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)}; //It will have 20 bytes, 
+//index 19 for register 18
         int index = 2;
         
         for (int i = 0; i < 8; i++) {
@@ -228,7 +228,11 @@ void sendBlockRegisters(int bloc) {
         // Serial.println(mb.Hreg(22));
         // Serial.println(mb.Hreg(23));
     } else if (bloc == 7) {
-        uint16_t registres[] = {mb.Hreg(22), mb.Hreg(23)}; 
+        uint16_t registres[] =
+        {
+            mb.Hreg(18), mb.Hreg(19), mb.Hreg(20), mb.Hreg(21),
+            mb.Hreg(22), mb.Hreg(23), mb.Hreg(22), mb.Hreg(23)
+        }; 
 
         int index = 2;
         
@@ -286,6 +290,7 @@ if (result & 0x0008) {
         //delay(25);
         sendBlockRegisters(1);
         sendBlockRegisters(6);
+        sendBlockRegisters(7);
 
     
 }
