@@ -240,7 +240,7 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         } 
-    } 
+    }
     pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
@@ -350,6 +350,10 @@ void setup() {
         mb.addHreg(i);
     }
     mb.Hreg(210, 0x00);
+
+    // mb.Hreg(102, 0x0001);
+    // mb.Hreg(102, 0x0002);
+    // mb.Hreg(102, 0x0003);
 
 }
 
