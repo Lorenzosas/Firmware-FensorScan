@@ -43,6 +43,10 @@ EspSoftwareSerial::UART swSer;
 HardwareSerial Serial2(1);
 ModbusRTU mb;
 
+int msgCounter = 0;
+unsigned long lastMillis = 0;
+bool bluetooth_started = false;
+
 bool cb(Modbus::ResultCode event, uint16_t transactionId, void *data)
 { 
   // Callback to monitor errors
@@ -59,75 +63,6 @@ bool cbWrite(Modbus::ResultCode event, uint16_t transactionId, void* data) {
   return true;
 }
 
-// // Callback receives raw data from RTU Device and send back to BLE Client 
-// Modbus::ResultCode cbRtuRaw(uint8_t *data, uint8_t len, void *custom)
-// {
-//   auto src = (Modbus::frame_arg_t *)custom;
-//   int total_message_size = 1 + len + 2; // address + modbus msg + crc
-//   uint8_t bleMessage[BLE_SIZE];
-//   uint8_t rtuResponse[256];
-
-//   if (total_message_size > 256)
-//   {
-//     return Modbus::EX_PASSTHROUGH;
-//   }
-
-//   rtuResponse[0] = src->slaveId;
-
-//   // message
-//   for (size_t i = 0; i < len; i++)
-//   {
-//     rtuResponse[1 + i] = data[i];
-//   }
-//   rtuResponse[len + 1] = data[len];
-//   rtuResponse[len + 2] = data[len + 1];
-//   Serial.printf("RTU Message Recived Slave: %d, Fn: %02X, len: %d", src->slaveId, data[0], len);
-//   int numberBlePackets = total_message_size / BLE_SIZE;
-//   int finalBlePacketSize = total_message_size % BLE_SIZE;
-
-//   int dataIndex;
-
-//   dataIndex = 0;
-//   for (size_t i = 0; i < numberBlePackets; i++)
-//   {
-//     for (size_t j = 0; j < BLE_SIZE; j++)
-//     {
-//       bleMessage[j] = rtuResponse[dataIndex];
-//       dataIndex++;
-//     }
-
-//     Serial.println("Notify BLE Device 20 bytes");
-//     pTxCharacteristic->setValue(bleMessage, BLE_SIZE);
-//     pTxCharacteristic->notify();
-//   }
-
-//   if (finalBlePacketSize > 0)
-//   {
-//     for (size_t i = 0; i < finalBlePacketSize; i++)
-//     {
-//       bleMessage[i] = rtuResponse[dataIndex];
-//       dataIndex++;
-//     }
-//     Serial.println("Notify BLE Device final packet");
-//     pTxCharacteristic->setValue(bleMessage, finalBlePacketSize);
-//     pTxCharacteristic->notify();
-//   }
-
-//   return Modbus::EX_PASSTHROUGH;
-// }
-
-uint16_t readModbus() {
-    uint16_t res[REG_COUNT];
-    if (!mb.slave()) {
-        mb.readHreg(SLAVE_ID, FIRST_REG, res, REG_COUNT, cb);
-        while(mb.slave()) {
-            mb.task();
-            delay(10);
-        }
-        return(res[0]);
-    }
-    return 0;
-}
 
 class BleRxCallbacks : public BLECharacteristicCallbacks
 {
@@ -210,7 +145,7 @@ void sendBlockRegisters(int bloc) {
 
     if (bloc == 0) {
         // Récupération des registres 2/3, 4/5, 6/7, 8/9
-        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), 
+        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), //reg 4 > index 6
                                 mb.Hreg(6), mb.Hreg(7), mb.Hreg(8), mb.Hreg(9)};
 
                                 
@@ -223,8 +158,8 @@ void sendBlockRegisters(int bloc) {
     } else if (bloc == 1) {
         // Récupération des registres 10/11, 12/13, 14/15, 100
         uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
-                                mb.Hreg(14), mb.Hreg(15), mb.Hreg(100)}; 
-        int index = 2;
+                                mb.Hreg(24), mb.Hreg(25), mb.Hreg(100)}; //its sending register 0 / 1 starting at index 10, should it work?
+        int index = 2; //temeperature register is 10? supposed to be 0/1
         
         for (int i = 0; i < 8; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
@@ -232,8 +167,8 @@ void sendBlockRegisters(int bloc) {
         } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
         //but ble works better with 20 bytes, but you can try
 
-        // Serial.println("Register temperature" );
-        // Serial.println(message[13]);
+        Serial.println("Register 100" );
+        Serial.println(mb.Hreg(100));
 
     } else if (bloc == 2) {
         uint16_t registres[] = {mb.Hreg(300)}; 
@@ -274,7 +209,38 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
             message[index++] = registres[i] >> 8;   // Byte haut
         }
-    }    
+    }  else if (bloc == 6) {
+        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17), //not here 16 / 17 it was before no register 18
+                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)}; //It will have 20 bytes, 
+//index 19 for register 18
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } 
+        // Serial.println(mb.Hreg(16));
+        // Serial.println(mb.Hreg(17));
+        // Serial.println(mb.Hreg(18));
+        // Serial.println(mb.Hreg(19));
+        // Serial.println(mb.Hreg(20));
+        // Serial.println(mb.Hreg(21));
+        // Serial.println(mb.Hreg(22));
+        // Serial.println(mb.Hreg(23));
+    } else if (bloc == 7) {
+        uint16_t registres[] =
+        {
+            mb.Hreg(18), mb.Hreg(19), mb.Hreg(20), mb.Hreg(21),
+            mb.Hreg(22), mb.Hreg(23), mb.Hreg(22), mb.Hreg(23)
+        }; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 8; i++) {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } 
+    }
     pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
@@ -323,6 +289,8 @@ if (result & 0x0008) {
         sendBlockRegisters(0);
         //delay(25);
         sendBlockRegisters(1);
+        sendBlockRegisters(6);
+        sendBlockRegisters(7);
 
     
 }
@@ -381,8 +349,35 @@ void setup() {
     for (uint16_t i = REGN; i <= 305; i++) {
         mb.addHreg(i);
     }
+    mb.Hreg(210, 0x00);
 
-    BLEDevice::init("fensorscan");
+    // mb.Hreg(102, 0x0001);
+    // mb.Hreg(102, 0x0002);
+    // mb.Hreg(102, 0x0003);
+
+}
+
+String ushortAsciiArrayToString(unsigned short* array, int size) {
+    String result = "";
+    for (int i = 0; i < size; i++) {
+        char highByte = (char)((array[i] >> 8) & 0xFF);
+        char lowByte = (char)(array[i] & 0xFF);
+        result += lowByte;
+        result += highByte;
+
+    }
+    return result;
+  }
+
+void startBluetooth() {
+
+    uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213)};
+    if (registres[0] == 0x00) return; //probably its not starting because no values here
+    String serialNumber  =  ushortAsciiArrayToString(registres, 4);
+    String advertise_name = "fensorSCAN-";
+    advertise_name += serialNumber;
+    Serial.println(advertise_name);
+    BLEDevice::init(advertise_name.c_str());
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new BleServerCallbacks());
 
@@ -406,25 +401,30 @@ void setup() {
     pServer->getAdvertising()->start();
     Serial.println("Waiting for a client connection to notify...");
     pServer->startAdvertising();
+    bluetooth_started = true;
 }
-
-int msgCounter = 0;
-unsigned long lastMillis = 0;
 
    void loop() {
        unsigned long currentMillis = millis();
-       
-
-       if (currentMillis - lastMillis >= interval) {
+       mb.task();
+    //   uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211)};
+    //   String serialNumber =  ushortAsciiArrayToString(registres, 2);
+    //   String advertise_name = "fensorscan-";
+    //   advertise_name += serialNumber;
+    //    Serial.println(advertise_name);
+       if (bluetooth_started && currentMillis - lastMillis >= interval) {
            lastMillis = currentMillis;
            checkMessage();
-
-
-           if (msgCounter++ > 5) {
-               Serial.println("alive");
-               msgCounter = 0;
-           }
+       } else if(!bluetooth_started) {
+            startBluetooth();
        }
-           mb.task();
-       yield();
+
+        // if (msgCounter++ > 5) {
+        //     Serial.println("alive");
+        //     msgCounter = 0;
+        // }
+
+        //mb.task();
+
+        yield();
    }
