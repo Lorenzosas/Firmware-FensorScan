@@ -158,7 +158,7 @@ void sendBlockRegisters(int bloc) {
     } else if (bloc == 1) {
         // Récupération des registres 10/11, 12/13, 14/15, 100
         uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
-                                mb.Hreg(24), mb.Hreg(25), mb.Hreg(100)}; //its sending register 0 / 1 starting at index 10, should it work?
+                                mb.Hreg(24), mb.Hreg(25)}; //its sending register 0 / 1 starting at index 10, should it work?
         int index = 2; //temeperature register is 10? supposed to be 0/1
         
         for (int i = 0; i < 8; i++) {
@@ -175,7 +175,7 @@ void sendBlockRegisters(int bloc) {
 
         int index = 2;
         
-        for (int i = 0; i < 8; i++) {
+        for (int i = 0; i < 2; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         }
@@ -240,7 +240,19 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         } 
-    }
+    } else if (bloc == 8) {
+        uint16_t registres[] =
+        {
+            mb.Hreg(101), mb.Hreg(102), mb.Hreg(100)
+        }; 
+
+        int index = 2;
+        
+        for (int i = 0; i < 3; i++) { //your array doenst have 8 {
+            message[index++] = registres[i] >> 8;   // Byte haut
+            message[index++] = registres[i] & 0xFF; // Byte bas
+        } 
+    } 
     pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
     pTxCharacteristic->notify();
 }
@@ -291,6 +303,7 @@ if (result & 0x0008) {
         sendBlockRegisters(1);
         sendBlockRegisters(6);
         sendBlockRegisters(7);
+        sendBlockRegisters(8);
 
     
 }
@@ -407,6 +420,25 @@ void startBluetooth() {
    void loop() {
        unsigned long currentMillis = millis();
        mb.task();
+
+       if (_hasMessage) {
+    _hasMessage = 0;
+
+    // Parse la commande
+    int separatorIndex = _lastCommand.indexOf(':');
+    if (separatorIndex != -1) {
+        int address = _lastCommand.substring(0, separatorIndex).toInt();
+        int value = _lastCommand.substring(separatorIndex + 1).toInt();
+
+        Serial.print("Commande reçue : ");
+        Serial.print(address);
+        Serial.print(" -> ");
+        Serial.println(value);
+
+        // Écriture dans le registre demandé
+        mb.Hreg(address, value);
+    }
+}
     //   uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211)};
     //   String serialNumber =  ushortAsciiArrayToString(registres, 2);
     //   String advertise_name = "fensorscan-";
@@ -418,6 +450,13 @@ void startBluetooth() {
        } else if(!bluetooth_started) {
             startBluetooth();
        }
+
+       if (mb.Hreg(102) == 1) {
+    Serial.println("LED virtuelle ON");
+} else {
+    Serial.println("LED virtuelle OFF");
+}
+
 
         // if (msgCounter++ > 5) {
         //     Serial.println("alive");
