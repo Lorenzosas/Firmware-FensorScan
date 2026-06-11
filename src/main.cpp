@@ -21,7 +21,6 @@
 #define REG_COUNT 17
 
 #define REGN 1
-#define SLAVE_ID 1
 
 BLEServer *pServer = NULL;
 BLECharacteristic *pTxCharacteristic = NULL;
@@ -46,6 +45,7 @@ ModbusRTU mb;
 int msgCounter = 0;
 unsigned long lastMillis = 0;
 bool bluetooth_started = false;
+unsigned long lastDebugMillis = 0;
 
 bool cb(Modbus::ResultCode event, uint16_t transactionId, void *data)
 { 
@@ -133,8 +133,7 @@ void envoyerMessageAvecAdresseValeur(int adresse, const char* valeur)
 // Nouvelle fonction pour créer la chaîne de caractères "adresse:valeur"
 void envoyerFloatMessageAvecAdresseValeur(int adresse, float valeur)
 {
-    String nouvelleChaine = String(adresse) + ":" + String(valeur);//valeur comes from?
-
+    String nouvelleChaine = String(adresse) + ":" + String(valeur);
     sendMessageToSlave(nouvelleChaine);
 }
 
@@ -145,10 +144,9 @@ void sendBlockRegisters(int bloc) {
 
     if (bloc == 0) {
         // Récupération des registres 2/3, 4/5, 6/7, 8/9
-        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5), //reg 4 > index 6
+        uint16_t registres[] = {mb.Hreg(2), mb.Hreg(3), mb.Hreg(4), mb.Hreg(5),
                                 mb.Hreg(6), mb.Hreg(7), mb.Hreg(8), mb.Hreg(9)};
 
-                                
         int index = 2;
 
         for (int i = 0; i < 8; i++) {
@@ -158,14 +156,13 @@ void sendBlockRegisters(int bloc) {
     } else if (bloc == 1) {
         // Récupération des registres 10/11, 12/13, 14/15, 100
         uint16_t registres[] = {mb.Hreg(10), mb.Hreg(11), mb.Hreg(12), mb.Hreg(13), 
-                                mb.Hreg(24), mb.Hreg(25)}; //its sending register 0 / 1 starting at index 10, should it work?
-        int index = 2; //temeperature register is 10? supposed to be 0/1
+                                mb.Hreg(24), mb.Hreg(25)};
+        int index = 2;
         
         for (int i = 0; i < 8; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
-        } // message have 20 bytes, if adding a new register you need to change message to 24bytes and i < 9
-        //but ble works better with 20 bytes, but you can try
+        }
 
         Serial.println("Register 100" );
         Serial.println(mb.Hreg(100));
@@ -181,7 +178,7 @@ void sendBlockRegisters(int bloc) {
         }
     } else if (bloc == 3) {
         uint16_t registres[] = {mb.Hreg(200), mb.Hreg(201), mb.Hreg(202), mb.Hreg(203), mb.Hreg(204),
-                                mb.Hreg(205), mb.Hreg(206), mb.Hreg(207)};//, mb.Hreg(208), mb.Hreg(209)}; 
+                                mb.Hreg(205), mb.Hreg(206), mb.Hreg(207)}; 
 
         int index = 2;
         
@@ -191,7 +188,7 @@ void sendBlockRegisters(int bloc) {
         }
     } else if (bloc == 4) {
         uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213), mb.Hreg(214),
-                                mb.Hreg(215), mb.Hreg(216), mb.Hreg(217)};//, mb.Hreg(218), mb.Hreg(219)}; 
+                                mb.Hreg(215), mb.Hreg(216), mb.Hreg(217)}; 
 
         int index = 2;
         
@@ -201,7 +198,7 @@ void sendBlockRegisters(int bloc) {
         }
     } else if (bloc == 5) {
         uint16_t registres[] = {mb.Hreg(220), mb.Hreg(221), mb.Hreg(222), mb.Hreg(223), mb.Hreg(224),
-                                mb.Hreg(225), mb.Hreg(226), mb.Hreg(227)};//, mb.Hreg(228), mb.Hreg(229)}; 
+                                mb.Hreg(225), mb.Hreg(226), mb.Hreg(227)}; 
 
         int index = 2;
         
@@ -209,27 +206,17 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
             message[index++] = registres[i] >> 8;   // Byte haut
         }
-    }  else if (bloc == 6) {
-        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17), //not here 16 / 17 it was before no register 18
-                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)}; //It will have 20 bytes, 
-//index 19 for register 18
+    } else if (bloc == 6) {
+        uint16_t registres[] = {mb.Hreg(14), mb.Hreg(15), mb.Hreg(16), mb.Hreg(17),
+                                mb.Hreg(20), mb.Hreg(21), mb.Hreg(22), mb.Hreg(23)};
         int index = 2;
         
         for (int i = 0; i < 8; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         } 
-        // Serial.println(mb.Hreg(16));
-        // Serial.println(mb.Hreg(17));
-        // Serial.println(mb.Hreg(18));
-        // Serial.println(mb.Hreg(19));
-        // Serial.println(mb.Hreg(20));
-        // Serial.println(mb.Hreg(21));
-        // Serial.println(mb.Hreg(22));
-        // Serial.println(mb.Hreg(23));
     } else if (bloc == 7) {
-        uint16_t registres[] =
-        {
+        uint16_t registres[] = {
             mb.Hreg(18), mb.Hreg(19), mb.Hreg(20), mb.Hreg(21),
             mb.Hreg(22), mb.Hreg(23), mb.Hreg(22), mb.Hreg(23)
         }; 
@@ -241,71 +228,64 @@ void sendBlockRegisters(int bloc) {
             message[index++] = registres[i] & 0xFF; // Byte bas
         } 
     } else if (bloc == 8) {
-        uint16_t registres[] =
-        {
+        uint16_t registres[] = {
             mb.Hreg(101), mb.Hreg(102), mb.Hreg(100)
         }; 
 
         int index = 2;
         
-        for (int i = 0; i < 3; i++) { //your array doenst have 8 {
+        for (int i = 0; i < 3; i++) {
             message[index++] = registres[i] >> 8;   // Byte haut
             message[index++] = registres[i] & 0xFF; // Byte bas
         } 
     } 
-    pTxCharacteristic->setValue(message, BLE_SIZE); //it will send only 20 bytes 
+    pTxCharacteristic->setValue(message, BLE_SIZE);
     pTxCharacteristic->notify();
 }
 
 
 void checkMessage()
 {
-    
     uint8_t result = mb.Hreg(300) & 0x000F; 
 
-if (result & 0x0001) { 
-    Serial.println("ACTIVE VALVE 1");
-    digitalWrite(D0, HIGH);
-} else {
-    digitalWrite(D0, LOW); 
-}
+    if (result & 0x0001) { 
+        Serial.println("ACTIVE VALVE 1");
+        digitalWrite(D0, HIGH);
+    } else {
+        digitalWrite(D0, LOW); 
+    }
 
-if (result & 0x0002) { 
-    Serial.println("ACTIVE VALVE 2");
-    digitalWrite(D1, HIGH);
-} else {
-    digitalWrite(D1, LOW); 
-}
+    if (result & 0x0002) { 
+        Serial.println("ACTIVE VALVE 2");
+        digitalWrite(D1, HIGH);
+    } else {
+        digitalWrite(D1, LOW); 
+    }
 
-if (result & 0x0004) { 
-    Serial.println("ACTIVE VALVE 3");
-    digitalWrite(D2, HIGH);
-} else {
-    digitalWrite(D2, LOW); 
-}
+    if (result & 0x0004) { 
+        Serial.println("ACTIVE VALVE 3");
+        digitalWrite(D2, HIGH);
+    } else {
+        digitalWrite(D2, LOW); 
+    }
 
-if (result & 0x0008) { 
-    Serial.println("ACTIVE VALVE 4");
-    digitalWrite(D3, HIGH);
-} else {
-    digitalWrite(D3, LOW); // Désactive la pin si le bit n'est pas actif
-}
+    if (result & 0x0008) { 
+        Serial.println("ACTIVE VALVE 4");
+        digitalWrite(D3, HIGH);
+    } else {
+        digitalWrite(D3, LOW);
+    }
 
-// Lecture automatique des données dès qu'une connexion est établie
-
-        Serial.println("Reading initial data...");
-        sendBlockRegisters(3);
-        sendBlockRegisters(4);
-        sendBlockRegisters(5);
-        //delay(25);
-        sendBlockRegisters(0);
-        //delay(25);
-        sendBlockRegisters(1);
-        sendBlockRegisters(6);
-        sendBlockRegisters(7);
-        sendBlockRegisters(8);
-
-    
+    // Lecture automatique des données dès qu'une connexion est établie
+    Serial.println("Reading initial data...");
+    sendBlockRegisters(3);
+    sendBlockRegisters(4);
+    sendBlockRegisters(5);
+    sendBlockRegisters(0);
+    sendBlockRegisters(1);
+    sendBlockRegisters(6);
+    sendBlockRegisters(7);
+    sendBlockRegisters(8);
 }
 
 
@@ -332,8 +312,19 @@ void stringToRegisters(const char* str, uint16_t* regs, int regCount) {
   }
 }
 
+String ushortAsciiArrayToString(unsigned short* array, int size) {
+    String result = "";
+    for (int i = 0; i < size; i++) {
+        char highByte = (char)((array[i] >> 8) & 0xFF);
+        char lowByte = (char)(array[i] & 0xFF);
+        result += lowByte;
+        result += highByte;
+    }
+    return result;
+}
+
 unsigned long previousMillis = 0;
-const unsigned long interval = 1000;  // interval at which to increment (milliseconds)
+const unsigned long interval = 1000;
 
 void setup() {
     Serial.begin(115200);
@@ -356,40 +347,91 @@ void setup() {
     mb.slave(SLAVE_ID);
 
     for (uint16_t i = REGN; i <= 305; i++) {
-    mb.addHreg(i, 0); // Initialiser chaque registre a 0
-}
+        mb.addHreg(i, 0);
+    }
     
     for (uint16_t i = REGN; i <= 305; i++) {
         mb.addHreg(i);
     }
     mb.Hreg(210, 0x00);
-
-    // mb.Hreg(102, 0x0001);
-    // mb.Hreg(102, 0x0002);
-    // mb.Hreg(102, 0x0003);
-
+    
+    Serial.println("=== ESP32 démarré ===");
+    Serial.println("Attente des registres Modbus...");
 }
-
-String ushortAsciiArrayToString(unsigned short* array, int size) {
-    String result = "";
-    for (int i = 0; i < size; i++) {
-        char highByte = (char)((array[i] >> 8) & 0xFF);
-        char lowByte = (char)(array[i] & 0xFF);
-        result += lowByte;
-        result += highByte;
-
-    }
-    return result;
-  }
 
 void startBluetooth() {
 
-    uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213)};
-    if (registres[0] == 0x00) return; //probably its not starting because no values here
-    String serialNumber  =  ushortAsciiArrayToString(registres, 4);
-    String advertise_name = "fensorSCAN-";
+    Serial.println("\n=== DÉMARRAGE BLUETOOTH ===");
+
+    // ✅ Lire le modèle de l'appareil (registres 200-203)
+    uint16_t modelRegisters[] = {mb.Hreg(200), mb.Hreg(201), mb.Hreg(202), mb.Hreg(203)};
+    
+    // Debug : afficher les valeurs brutes
+    Serial.println("Registres modèle (200-203) :");
+    for (int i = 0; i < 4; i++) {
+        Serial.print("  Reg ");
+        Serial.print(200 + i);
+        Serial.print(": 0x");
+        Serial.print(modelRegisters[i], HEX);
+        Serial.print(" (");
+        Serial.print((char)(modelRegisters[i] & 0xFF));
+        Serial.print((char)(modelRegisters[i] >> 8));
+        Serial.println(")");
+    }
+    
+    String modelName = ushortAsciiArrayToString(modelRegisters, 4);
+    modelName.trim();
+    modelName.toUpperCase();
+    
+    Serial.print("Modèle détecté : [");
+    Serial.print(modelName);
+    Serial.println("]");
+
+    // ✅ Lire le numéro de série (registres 210-213)
+    uint16_t serialRegisters[] = {mb.Hreg(210), mb.Hreg(211), mb.Hreg(212), mb.Hreg(213)};
+    
+    // Debug : afficher les valeurs brutes
+    Serial.println("Registres numéro de série (210-213) :");
+    for (int i = 0; i < 4; i++) {
+        Serial.print("  Reg ");
+        Serial.print(210 + i);
+        Serial.print(": 0x");
+        Serial.print(serialRegisters[i], HEX);
+        Serial.print(" (");
+        Serial.print((char)(serialRegisters[i] & 0xFF));
+        Serial.print((char)(serialRegisters[i] >> 8));
+        Serial.println(")");
+    }
+    
+    String serialNumber = ushortAsciiArrayToString(serialRegisters, 4);
+    serialNumber.trim();
+    
+    Serial.print("Numéro de série : [");
+    Serial.print(serialNumber);
+    Serial.println("]");
+
+    // ✅ Détection automatique : thermoSCAN ou densiSCAN
+    String advertise_name;
+    
+    if (modelName.indexOf("THERMO") >= 0) {
+        advertise_name = "thermoSCAN-";
+        Serial.println("✅ Type détecté : thermoSCAN");
+    } 
+    else if (modelName.indexOf("DENSI") >= 0) {
+        advertise_name = "densiSCAN-";
+        Serial.println("✅ Type détecté : densiSCAN");
+    }
+    else {
+        advertise_name = "fensorSCAN-";
+        Serial.println("⚠️ Type non détecté, nom par défaut");
+    }
+    
     advertise_name += serialNumber;
-    Serial.println(advertise_name);
+    
+    Serial.print("📡 Nom Bluetooth final : [");
+    Serial.print(advertise_name);
+    Serial.println("]");
+    
     BLEDevice::init(advertise_name.c_str());
     pServer = BLEDevice::createServer();
     pServer->setCallbacks(new BleServerCallbacks());
@@ -412,58 +454,65 @@ void startBluetooth() {
     
     pService->start();
     pServer->getAdvertising()->start();
-    Serial.println("Waiting for a client connection to notify...");
+    Serial.println("✅ Bluetooth démarré et en publicité");
     pServer->startAdvertising();
     bluetooth_started = true;
+    
+    Serial.println("=== FIN DÉMARRAGE BLUETOOTH ===\n");
 }
 
-   void loop() {
-       unsigned long currentMillis = millis();
-       mb.task();
+void loop() {
+    unsigned long currentMillis = millis();
+    mb.task();
 
-       if (_hasMessage) {
-    _hasMessage = 0;
+    if (_hasMessage) {
+        _hasMessage = 0;
 
-    // Parse la commande
-    int separatorIndex = _lastCommand.indexOf(':');
-    if (separatorIndex != -1) {
-        int address = _lastCommand.substring(0, separatorIndex).toInt();
-        int value = _lastCommand.substring(separatorIndex + 1).toInt();
+        // Parse la commande
+        int separatorIndex = _lastCommand.indexOf(':');
+        if (separatorIndex != -1) {
+            int address = _lastCommand.substring(0, separatorIndex).toInt();
+            int value = _lastCommand.substring(separatorIndex + 1).toInt();
 
-        Serial.print("Commande reçue : ");
-        Serial.print(address);
-        Serial.print(" -> ");
-        Serial.println(value);
+            Serial.print("Commande reçue : ");
+            Serial.print(address);
+            Serial.print(" -> ");
+            Serial.println(value);
 
-        // Écriture dans le registre demandé
-        mb.Hreg(address, value);
+            // Écriture dans le registre demandé
+            mb.Hreg(address, value);
+        }
     }
-}
-    //   uint16_t registres[] = {mb.Hreg(210), mb.Hreg(211)};
-    //   String serialNumber =  ushortAsciiArrayToString(registres, 2);
-    //   String advertise_name = "fensorscan-";
-    //   advertise_name += serialNumber;
-    //    Serial.println(advertise_name);
-       if (bluetooth_started && currentMillis - lastMillis >= interval) {
-           lastMillis = currentMillis;
-           checkMessage();
-       } else if(!bluetooth_started) {
+
+    if (bluetooth_started && currentMillis - lastMillis >= interval) {
+        lastMillis = currentMillis;
+        checkMessage();
+    } else if(!bluetooth_started) {
+        // ✅ NOUVELLE LOGIQUE : Attendre que les registres 200 ET 210 soient remplis
+        uint16_t reg200 = mb.Hreg(200);
+        uint16_t reg210 = mb.Hreg(210);
+        
+        if (reg200 != 0 && reg210 != 0) {
+            // Les registres sont remplis, on peut démarrer le Bluetooth
+            Serial.println("\n✅ Registres détectés (modèle + série), démarrage Bluetooth...");
             startBluetooth();
-       }
+        } else {
+            // Afficher toutes les 2 secondes
+            if (currentMillis - lastDebugMillis >= 2000) {
+                lastDebugMillis = currentMillis;
+                Serial.print("⏳ Attente des registres Modbus - reg200=0x");
+                Serial.print(reg200, HEX);
+                Serial.print(" reg210=0x");
+                Serial.println(reg210, HEX);
+            }
+        }
+    }
 
-       if (mb.Hreg(102) == 1) {
-    Serial.println("LED virtuelle ON");
-} else {
-    Serial.println("LED virtuelle OFF");
+    if (mb.Hreg(102) == 1) {
+        // Serial.println("LED virtuelle ON");
+    } else {
+        // Serial.println("LED virtuelle OFF");
+    }
+
+    yield();
 }
-
-
-        // if (msgCounter++ > 5) {
-        //     Serial.println("alive");
-        //     msgCounter = 0;
-        // }
-
-        //mb.task();
-
-        yield();
-   }
